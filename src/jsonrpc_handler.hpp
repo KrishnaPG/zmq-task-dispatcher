@@ -13,6 +13,6 @@ public:
 
 private:
     void send_response(int64_t id, const std::string& result);
-    zmq::socket_t& pub_socket_;
+    zmq::socket_t& m_zmqPub;
     bool benchmark_;
 };

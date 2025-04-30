@@ -11,11 +11,11 @@ public:
     void run();
     using TThreadPool = BS::thread_pool<>;
 private:
-    zmq::context_t context_;
-    zmq::socket_t pub_socket_;
-    zmq::socket_t sub_socket_;
-    std::unique_ptr<TThreadPool> thread_pool_;
-    std::unique_ptr<MessageDispatcher> dispatcher_;
+    zmq::context_t m_zmqCtx;
+    zmq::socket_t m_zmqPub;
+    zmq::socket_t m_zmqSub;
+    std::unique_ptr<TThreadPool> m_spThreadPool;
+    std::unique_ptr<MessageDispatcher> m_spDispatcher;
     bool benchmark_;
-    int shutdown_fd_;
+    int m_fdShutdown;
 };

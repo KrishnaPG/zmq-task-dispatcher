@@ -10,7 +10,7 @@
 using namespace std::chrono;
 
 JsonRpcHandler::JsonRpcHandler(zmq::socket_t& pub_socket, bool benchmark)
-    : pub_socket_(pub_socket), benchmark_(benchmark)
+    : m_zmqPub(pub_socket), benchmark_(benchmark)
 { }
 
 void JsonRpcHandler::handle_launch_pipeline(simdjson::ondemand::value params)
@@ -33,6 +33,10 @@ void JsonRpcHandler::handle_launch_pipeline(simdjson::ondemand::value params)
         return;
     }
     send_log("INFO", "Launching pipeline: " + std::string(pipeline) + " for stream " + std::string(streamId));
+    {
+        // This is just a dummy placeholder method to demo the functionality.
+        // Do something here as per the task.
+    }
     std::ostringstream oss;
     oss << "{\"status\":\"success\",\"streamId\":\"" << streamId << "\",\"details\":\"Pipeline launched\"}";
     send_response(id, oss.str());
@@ -57,6 +61,10 @@ void JsonRpcHandler::handle_stop_pipeline(simdjson::ondemand::value params)
 
     // Process pipeline
     send_log("INFO", "Stopping pipeline for stream " + std::string(streamId));
+    {
+        // This is just a dummy placeholder method to demo the functionality.
+        // Do something here as per the task.
+    }
     std::ostringstream oss;
     oss << "{\"status\":\"success\",\"streamId\":\"" << streamId << "\",\"details\":\"Pipeline stopped\"}";
     send_response(id, oss.str());
@@ -75,7 +83,7 @@ void JsonRpcHandler::send_response(int64_t id, const std::string& result)
 #endif
     std::ostringstream oss;
     oss << "{\"jsonrpc\":\"2.0\",\"id\":" << id << ",\"result\":" << result << "}";
-    utils::publish_message(pub_socket_, oss.str());
+    utils::publish_message(m_zmqPub, oss.str());
 }
 
 void JsonRpcHandler::send_error(int64_t id, int code, const std::string& message)
@@ -85,7 +93,7 @@ void JsonRpcHandler::send_error(int64_t id, int code, const std::string& message
 #endif
     std::ostringstream oss;
     oss << "{\"jsonrpc\":\"2.0\",\"id\":" << id << ",\"error\":{\"code\":" << code << ",\"message\":\"" << message << "\"}}";
-    utils::publish_message(pub_socket_, oss.str());
+    utils::publish_message(m_zmqPub, oss.str());
 }
 
 void JsonRpcHandler::send_log(const std::string& level, const std::string& message)
@@ -95,5 +103,5 @@ void JsonRpcHandler::send_log(const std::string& level, const std::string& messa
 #endif
     std::ostringstream oss;
     oss << "{\"jsonrpc\":\"2.0\",\"method\":\"log\",\"params\":{\"level\":\"" << level << "\",\"message\":\"" << message << "\"}}";
-    utils::publish_message(pub_socket_, oss.str());
+    utils::publish_message(m_zmqPub, oss.str());
 }

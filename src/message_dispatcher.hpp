@@ -9,12 +9,12 @@
 class MessageDispatcher {
 public:
     MessageDispatcher(zmq::socket_t& pub_socket, bool benchmark);
-    void process_request(simdjson::ondemand::document& request);
+    void process_request(simdjson::ondemand::document request);
     void send_error(int64_t id, int code, const std::string& message);
 
 private:
     using HandlerFunc = std::function<void(simdjson::ondemand::document&, JsonRpcHandler&)>;
-    static const std::unordered_map<std::string_view, HandlerFunc> handlers_;
-    JsonRpcHandler handler_;
+    static const std::unordered_map<std::string_view, HandlerFunc> m_Handlers;
+    JsonRpcHandler m_Handler;
     bool benchmark_;
 };

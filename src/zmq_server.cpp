@@ -7,43 +7,51 @@
 #endif
 
 ZmqServer::ZmqServer(const std::string& pub_endpoint, const std::string& sub_endpoint, bool benchmark, int shutdown_fd)
-    : context_(1), pub_socket_(context_, ZMQ_PUB), sub_socket_(context_, ZMQ_SUB), benchmark_(benchmark), shutdown_fd_(shutdown_fd) {
+    : m_zmqCtx(1), m_zmqPub(m_zmqCtx, ZMQ_PUB), m_zmqSub(m_zmqCtx, ZMQ_SUB), benchmark_(benchmark), m_fdShutdown(shutdown_fd) {
 #ifdef ENABLE_TRACY
     ZoneScoped;
 #endif
     // Configure sockets
-    pub_socket_.bind(pub_endpoint);
-    sub_socket_.connect(sub_endpoint);
-    sub_socket_.set(zmq::sockopt::subscribe, "");
+    m_zmqPub.bind(pub_endpoint);
+    m_zmqSub.connect(sub_endpoint);
+    m_zmqSub.set(zmq::sockopt::subscribe, "");
 
     // Initialize thread pool and dispatcher
-    thread_pool_ = std::make_unique<TThreadPool>(std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4);
-    dispatcher_ = std::make_unique<MessageDispatcher>(pub_socket_, benchmark_);
+    m_spThreadPool = std::make_unique<TThreadPool>(std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4);
+    m_spDispatcher = std::make_unique<MessageDispatcher>(m_zmqPub, benchmark_);
 }
+
+// we prefer zmq::poll to wait indefinitely. But that is not supported on Windows.
+// Hence for windows, we use timeout. For Linux system, the poll() waits indefinitely.
+#ifdef _WIN32
+#define TIMEOUT std::chrono::milliseconds(1000)
+#else 
+#define TIMEOUT -1
+#endif
 
 void ZmqServer::run() {
 #ifdef ENABLE_TRACY
     ZoneScoped;
 #endif
     zmq::pollitem_t items[] = {
-        {sub_socket_, 0, ZMQ_POLLIN, 0},
-        {nullptr, shutdown_fd_, ZMQ_POLLIN, 0}
+        {m_zmqSub, 0, ZMQ_POLLIN, 0},
+        {nullptr, m_fdShutdown, ZMQ_POLLIN, 0}
     };
     simdjson::ondemand::parser parser;
 
     while (true) {
-        // Poll indefinitely
-        try {
-            zmq::poll(items, 2, -1);
+        try {        
+            // Waits indefinitely or till timeout
+            zmq::poll(items, 2, TIMEOUT);
         } catch (const zmq::error_t& e) {
-            dispatcher_->send_error(-1, -32000, "Poll error: " + std::string(e.what()));
+            m_spDispatcher->send_error(-1, -32000, "Poll error: " + std::string(e.what()));
             continue;
         }
 
         // Check for shutdown
         if (items[1].revents & ZMQ_POLLIN) {
             uint64_t val;
-            read(shutdown_fd_, &val, sizeof(val));
+            _read(m_fdShutdown, &val, sizeof(val));
             break;
         }
 
@@ -53,8 +61,8 @@ void ZmqServer::run() {
             ZoneScopedN("ReceiveMessage");
 #endif
             zmq::message_t msg;
-            if (!sub_socket_.recv(msg)) {
-                dispatcher_->send_error(-1, -32000, "Receive error");
+            if (!m_zmqSub.recv(msg)) {
+                m_spDispatcher->send_error(-1, -32000, "Receive error");
                 continue;
             }
 
@@ -62,16 +70,16 @@ void ZmqServer::run() {
             simdjson::padded_string padded(data);
             simdjson::ondemand::document doc;
             if (parser.iterate(padded).get(doc)) {
-                dispatcher_->send_error(-1, -32700, "Parse error");
+                m_spDispatcher->send_error(-1, -32700, "Parse error");
                 continue;
             }
 
-            thread_pool_->submit_task([this, doc = std::move(doc)]() mutable {
-                dispatcher_->process_request(doc);
+            m_spThreadPool->submit_task([this, doc = std::move(doc)]() mutable {
+                m_spDispatcher->process_request(std::move(doc));
             });
         }
     }
 
     // Graceful shutdown: wait for all tasks to complete
-    thread_pool_->wait();
+    m_spThreadPool->wait();
 }

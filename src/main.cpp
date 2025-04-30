@@ -1,20 +1,31 @@
+#ifdef ENABLE_TRACY
+#include <tracy/Tracy.hpp>
+#endif
+
 #include "zmq_server.hpp"
 #include "deps/cppzmq/zmq.hpp"
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <io.h>
+#include <fcntl.h>
+
+// we can do CreateNamedPipe() for Windows but for now we just use timeouts in the zmq::poll
+#ifdef _WIN32
+#define EVENTFD -1 
+#else
 #include <sys/eventfd.h>
 #include <unistd.h>
-#ifdef ENABLE_TRACY
-#include <tracy/Tracy.hpp>
+#define EVENTFD eventfd(0, EFD_NONBLOCK)
 #endif
+
 
 int g_shutdown_fd = -1;
 
 void signal_handler(int) {
     if (g_shutdown_fd != -1) {
         uint64_t val = 1;
-        write(g_shutdown_fd, &val, sizeof(val));
+        _write(g_shutdown_fd, &val, sizeof(val));
     }
 }
 
@@ -23,7 +34,7 @@ int main(int argc, char* argv[]) {
     ZoneScoped;
 #endif
     // Create eventfd for shutdown signaling
-    g_shutdown_fd = eventfd(0, EFD_NONBLOCK);
+    g_shutdown_fd = EVENTFD;
     if (g_shutdown_fd == -1) {
         std::cerr << "Failed to create eventfd: " << strerror(errno) << std::endl;
         return 1;

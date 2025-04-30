@@ -4,7 +4,7 @@
 #include <tracy/Tracy.hpp>
 #endif
 
-const std::unordered_map<std::string_view, MessageDispatcher::HandlerFunc> MessageDispatcher::handlers_ = {
+const std::unordered_map<std::string_view, MessageDispatcher::HandlerFunc> MessageDispatcher::m_Handlers = {
     {"launchPipeline", [](simdjson::ondemand::document& request, JsonRpcHandler& handler) {
         simdjson::ondemand::value params = request.find_field("params");
         handler.handle_launch_pipeline(params);
@@ -17,9 +17,9 @@ const std::unordered_map<std::string_view, MessageDispatcher::HandlerFunc> Messa
 };
 
 MessageDispatcher::MessageDispatcher(zmq::socket_t& pub_socket, bool benchmark)
-    : handler_(pub_socket, benchmark), benchmark_(benchmark) {}
+    : m_Handler(pub_socket, benchmark), benchmark_(benchmark) {}
 
-void MessageDispatcher::process_request(simdjson::ondemand::document& request) {
+void MessageDispatcher::process_request(simdjson::ondemand::document request) {
 #ifdef ENABLE_TRACY
     ZoneScopedN("ProcessRequest");
 #endif
@@ -39,10 +39,10 @@ void MessageDispatcher::process_request(simdjson::ondemand::document& request) {
     }
 
     // Dispatch to handler
-    auto it = handlers_.find(method);
-    if (it != handlers_.end()) {
+    auto it = m_Handlers.find(method);
+    if (it != m_Handlers.end()) {
         try {
-            it->second(request, handler_);
+            it->second(request, m_Handler);
         } catch (const std::exception& e) {
             send_error(id, -32000, "Handler error: " + std::string(e.what()));
         }
@@ -52,5 +52,5 @@ void MessageDispatcher::process_request(simdjson::ondemand::document& request) {
 }
 
 void MessageDispatcher::send_error(int64_t id, int code, const std::string& message) {
-    handler_.send_error(id, code, message);
+    m_Handler.send_error(id, code, message);
 }
