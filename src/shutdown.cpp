@@ -4,7 +4,7 @@
 #include <iostream>
 
 volatile bool gbShouldExit = false;
-zmq::socket_t g_shutdown_signaler;
+static zmq::socket_t g_shutdown_signaler;
 
 bool shouldExit() { return  gbShouldExit; }
 

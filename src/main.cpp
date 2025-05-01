@@ -5,6 +5,7 @@
 #include "deps/cppzmq/zmq.hpp"
 #include "shutdown.hpp"
 #include "tracer.hpp"
+#include "worker-pool.hpp"
 
 // Message types
 enum class MessageType : uint8_t
@@ -122,7 +123,10 @@ int main()
     // Initialize ZeroMQ zmq_ctx with single IO thread
     zmq::context_t zmq_ctx { 1 };
 
-    // Create eventfd for shutdown signaling
+    // Create worker pool
+    WorkerPool worker_pool(zmq_ctx, std::thread::hardware_concurrency());
+
+    // setup shutdown signaling
     setup_shutdown_handlers(zmq_ctx);
     
     // setup shutdown signal listener
@@ -130,7 +134,7 @@ int main()
     shutdown_listener.bind(SHUTDOWN_INPROC_ADDR);
     shutdown_listener.set(zmq::sockopt::linger, 0);
 
-    // setup JSONRPC Command listener
+    // setup Command listener
     zmq::socket_t subscriber(zmq_ctx, ZMQ_SUB);
     // Set socket options for performance
     subscriber.set(zmq::sockopt::rcvbuf, 1024 * 1024);  // 1MB receive buffer
@@ -169,7 +173,11 @@ int main()
 
                     // Parse and dispatch with zero-copy
                     Message message = parseMessage(std::move(msg));
-                    //dispatch(message);
+
+                    if (!worker_pool.dispatch(std::move(message))) {
+                        std::cerr << "Failed to dispatch message, notifying external caller\n";
+                        // TODO: Send error message to external caller (e.g., via ZeroMQ PUB socket)
+                    }                                        
                 }
             }
         }
