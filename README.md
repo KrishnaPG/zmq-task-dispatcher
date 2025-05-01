@@ -13,7 +13,8 @@ graph TD
     B --> C[BS::thread_pool]
     C --> D[MessageDispatcher]
     D --> E[JsonRpcHandler]
-    B --> F[ZMQ_PAIR: Shutdown]
+    A <--> F[ZMQ_PAIR: Shutdown]
+    F <--> H[SIG Events Handlers]
 ```
 
 ## Features
