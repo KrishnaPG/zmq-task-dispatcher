@@ -3,6 +3,7 @@ FROM ubuntu:24.04 AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
+    pkg-config \
     build-essential \
     cmake \
     git \
@@ -29,7 +30,7 @@ RUN cmake ..
 # Compile the project using make
 RUN make -j$(nproc)
 
-# RUN g++ -std=c++23 -O3 -march=native -Wall -Wextra -I/usr/local/include -I. main.cpp shutdown.cpp -o zmq_task_dispatcher -lzmq
+# RUN g++ -std=c++23 -O3 -march=native -Wall -Wextra -I/usr/local/include -I. main.cpp shutdown.cpp -o zmq-task-dispatcher -lzmq
 
 # Runtime stage
 FROM ubuntu:24.04
@@ -40,10 +41,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary
-COPY --from=builder /app/zmq_task_dispatcher /usr/local/bin/
+COPY --from=builder /app/build/zmq-task-dispatcher /usr/local/bin/
 
 # Expose PUB port
 EXPOSE 5556
 
 # Run the application
-CMD ["zmq_task_dispatcher"]
+CMD ["zmq-task-dispatcher"]

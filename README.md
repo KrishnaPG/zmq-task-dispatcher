@@ -4,7 +4,7 @@ A high-performance C++23 application that processes JSONRPC requests over ZeroMQ
 
 With this you can build asynchronous task distribution systems, such as streaming media processing applications.
 
-This server uses a modular C++23 architecture with a ZeroMQ SUB socket to receive JSONRPC requests (e.g., launchPipeline) from any ZeroMQ client (e.g. Node.js client) and a ZeroMQ PUB socket to send back responses, errors, and logs, all asynchronously. Requests are parsed with `simdjson` and dispatched via a `std::unordered_map` to a `BS::thread_pool` for processing, ensuring optimal latency. Logs are sent as JSONRPC notifications over the PUB socket. The server uses `zmq::poll()` efficiently by waiting for both the SUB socket and an `eventfd` for shutdown signals, enabling efficient, indefinite blocking (thus no CPU cycles get wasted for frequent timeouts). 
+This server uses a modular C++23 architecture with a ZeroMQ SUB socket to receive JSONRPC requests (e.g., launchPipeline) from any ZeroMQ client (e.g. Node.js client) and a ZeroMQ PUB socket to send back responses, errors, and logs, all asynchronously. Requests are parsed with `simdjson` and dispatched via a `std::unordered_map` to a `BS::thread_pool` for processing, ensuring optimal latency. Logs are sent as JSONRPC notifications over the PUB socket. The server uses `zmq::poll()` efficiently by waiting for both the SUB socket and a ZMQ_PAIR sockets for shutdown signals, enabling efficient, indefinite blocking (thus no CPU cycles get wasted for frequent timeouts). 
 
 ```mermaid
 graph TD
@@ -13,7 +13,7 @@ graph TD
     B --> C[BS::thread_pool]
     C --> D[MessageDispatcher]
     D --> E[JsonRpcHandler]
-    B --> F[eventfd: Shutdown]
+    B --> F[ZMQ_PAIR: Shutdown]
 ```
 
 ## Features
@@ -25,11 +25,11 @@ graph TD
   - Zero-copy JSON parsing with `simdjson`.
   - Lock-free task submission via `BS::thread_pool`.
   - Minimal allocations using `std::string_view`.
-  - Compiled with `-O3` and `-march=native`.
+  - CMake based compilation with Docker ready builds
 - **Error Handling**:
   - Exponential backoff retries (1ms, 2ms, 4ms) for failed operations.
   - Worker crash handling with exception logging.
-  - Graceful shutdown on SIGINT/SIGTERM using `eventfd` for efficient polling.
+  - Graceful shutdown on SIGINT/SIGTERM using ZMQ_PAIR `inproc` socket for efficient polling.
 - **Logging**: Sends logs as JSONRPC notifications over PUB socket.
 - **Benchmarking**: Integrates Tracy for profiling latency and throughput, enabled via `--benchmark` flag.
 - **Dockerized**: Runs on `ubuntu:24.04` with multi-stage build for minimal image size.
@@ -44,24 +44,20 @@ graph TD
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/KrishnaPG/zeromq-task-dispatcher
-   cd zeromq-task-dispatcher
+   git clone https://github.com/KrishnaPG/zeromq-task-dispatcher zmq-task-dispatcher
+   cd zmq-task-dispatcher
    ```
 
 2. **Build the Docker Image**:
    ```bash
-   docker build -t zmq-server .
+   docker build -t zmq-task-dispatcher .
    ```
 
 3. **Run the Container**:
    ```bash
-   docker run -p 5556:5556 -e PUB_ENDPOINT=tcp://*:5556 -e SUB_ENDPOINT=tcp://host.docker.internal:5555 zmq-server
+   docker run -p 5556:5556 -e PUB_ENDPOINT=tcp://*:5556 -e SUB_ENDPOINT=tcp://host.docker.internal:5555 zmq-task-dispatcher
    ```
    - Replace `host.docker.internal` with the host IP if needed.
-   - Add `--benchmark` to enable Tracy profiling and latency logging:
-     ```bash
-     docker run -p 5556:5556 -e PUB_ENDPOINT=tcp://*:5556 -e SUB_ENDPOINT=tcp://host.docker.internal:5555 zmq-server --benchmark
-     ```
 
 4. **Node.js Client**:
    - Ensure the client sends JSONRPC requests (e.g., `launchPipeline`) to `tcp://<container>:5555` and subscribes to `tcp://<container>:5556` for responses, errors, and logs.
@@ -119,11 +115,21 @@ To add new JSONRPC methods (e.g., `newMethod`):
    docker run -p 5556:5556 -e PUB_ENDPOINT=tcp://*:5556 -e SUB_ENDPOINT=tcp://host.docker.internal:5555 zmq-task-dispatcher
    ```
 
+## Run without Docker
+
+To build and run without docker, the following commands can be used from the source code root folder :
+```sh   
+   mkdir build
+   cd build
+   cmake ..
+   make   
+```
+
 ## Performance Notes
 
 - **Latency**: Optimized for end-to-end latency using `simdjson`, `std::unordered_map`, and `BS::thread_pool`.
 - **Throughput**: Scales with CPU cores, handling thousands of requests per second.
-- **Idle Efficiency**: Uses `eventfd` with `zmq_poll` to block indefinitely, waking only for messages or shutdown.
+- **Idle Efficiency**: Uses ZMQ PAIR socket with `zmq_poll` to block indefinitely, waking only for messages or shutdown.
 - **Profiling**: Tracy provides detailed metrics on message processing and task execution.
 
 ## Error Handling
