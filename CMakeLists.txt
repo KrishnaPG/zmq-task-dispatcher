@@ -8,31 +8,29 @@ set(CMAKE_BUILD_TYPE Release)
 SET(ENABLE_TRACY OFF CACHE BOOL "Enable/Disable Tracy Profiler")
 
 find_package(ZeroMQ REQUIRED)
+if(ZeroMQ_FOUND)
+else()
+  message(FATAL_ERROR "ZeroMQ library not found")
+endif()
 
 if(ENABLE_TRACY)
     find_library(TRACY_LIBRARY NAMES tracy)
 endif()
 
 SET(HeaderFiles 
-    src/jsonrpc_handler.hpp 
-    src/message_dispatcher.hpp
+    src/shutdown.hpp
+    src/tracer.hpp
     src/utils.hpp
-    src/zmq_server.hpp
     )
 
 SET(SourceFiles 
     src/main.cpp
-    src/zmq_server.cpp
-    src/message_dispatcher.cpp
-    src/jsonrpc_handler.cpp
+    src/shutdown.cpp
     )
 
 SET(3rdPartyFiles 
     src/deps/cppzmq/zmq.hpp 
     src/deps/cppzmq/zmq_addon.hpp
-    src/deps/thread-pool/BS_thread_pool.hpp
-    src/deps/simdjson-3.10.1/singleheader/simdjson.h
-    src/deps/simdjson-3.10.1/singleheader/simdjson.cpp
     )
 
 SOURCE_GROUP(Header_Files 	FILES ${HeaderFiles})
@@ -42,15 +40,14 @@ SOURCE_GROUP(3rdParty 	    FILES ${3rdPartyFiles})
 add_executable(zmq_task_dispatcher ${HeaderFiles} ${SourceFiles} ${3rdPartyFiles})
 
 target_include_directories(zmq_task_dispatcher PRIVATE
+    ${ZeroMQ_INCLUDE_DIRS}
     /usr/local/include 
     src
 )
 
 target_link_libraries(zmq_task_dispatcher PRIVATE
-    zmq
-    simdjson
+    ${ZeroMQ_LIBRARIES}
     ${TRACY_LIBRARY}
-    pthread
 )
 
 if(MSVC)

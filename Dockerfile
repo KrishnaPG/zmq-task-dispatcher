@@ -12,23 +12,24 @@ RUN apt-get update && apt-get install -y \
 # turn the detached message off
 RUN git config --global advice.detachedHead false
 
-# Install Tracy
-RUN git clone --depth 1 --branch v0.11.1 https://github.com/wolfpld/tracy.git /tmp/tracy \
-    && cd /tmp/tracy \
-    && mkdir build && cd build \
-    && cmake .. && make -j$(nproc) && make install \
-    && rm -rf /tmp/tracy
-
 # Copy and build source code
 WORKDIR /app
 
-ADD src ./
+ADD src ./src
+ADD CMakeLists.txt ./
 
-RUN ls 
+# Create build directory
+RUN mkdir build
+# Change to the build directory
+WORKDIR /app/build
 
-RUN g++ -std=c++23 -O3 -march=native -Wall -Wextra -I/usr/local/include -I.\
-    -DENABLE_TRACY main.cpp zmq_server.cpp message_dispatcher.cpp jsonrpc_handler.cpp deps/simdjson-3.10.1/singleheader/simdjson.cpp\
-    -o zmq_server -lzmq -lsimdjson -ltracy -pthread
+# Generate makefiles using CMake
+RUN cmake ..
+
+# Compile the project using make
+RUN make -j$(nproc)
+
+# RUN g++ -std=c++23 -O3 -march=native -Wall -Wextra -I/usr/local/include -I. main.cpp shutdown.cpp -o zmq_task_dispatcher -lzmq
 
 # Runtime stage
 FROM ubuntu:24.04
@@ -39,10 +40,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary
-COPY --from=builder /app/zmq_server /usr/local/bin/
+COPY --from=builder /app/zmq_task_dispatcher /usr/local/bin/
 
 # Expose PUB port
 EXPOSE 5556
 
 # Run the application
-CMD ["zmq_server", "--benchmark"]
+CMD ["zmq_task_dispatcher"]
