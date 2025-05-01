@@ -19,16 +19,10 @@ WORKDIR /app
 ADD src ./src
 ADD CMakeLists.txt ./
 
-# Create build directory
-RUN mkdir build
-# Change to the build directory
-WORKDIR /app/build
-
-# Generate makefiles using CMake
-RUN cmake ..
-
-# Compile the project using make
-RUN make -j$(nproc)
+# Build
+RUN mkdir build && cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    make -j$(nproc)
 
 # RUN g++ -std=c++23 -O3 -march=native -Wall -Wextra -I/usr/local/include -I. main.cpp shutdown.cpp -o zmq-task-dispatcher -lzmq
 

@@ -27,11 +27,13 @@ SET(HeaderFiles
     src/shutdown.hpp
     src/tracer.hpp
     src/utils.hpp
+    src/worker-pool.hpp
     )
 
 SET(SourceFiles 
     src/main.cpp
     src/shutdown.cpp
+    src/worker-pool.cpp
     )
 
 SET(3rdPartyFiles 

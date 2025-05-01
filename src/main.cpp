@@ -195,3 +195,22 @@ int main()
     std::cout << "Server has shut down" << std::endl;
     return 0;
 }
+
+/** 
+    // Compile-time handler dispatch
+
+    constexpr auto dispatch = [](const Message& message) {
+        std::visit(
+            [](const auto& payload) {
+                if constexpr (std::is_same_v<std::decay_t<decltype(payload)>, AudioPayload>) {
+                    processAudio(payload);
+                } else if constexpr (std::is_same_v<std::decay_t<decltype(payload)>, VideoPayload>) {
+                    processVideo(payload);
+                } else {
+                    processControl(payload);
+                }
+            },
+            message.payload
+        );
+    };
+*/

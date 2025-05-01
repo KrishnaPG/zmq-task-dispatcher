@@ -1,10 +1,14 @@
-# ZeroMQ JSONRPC Task Server
+# ZeroMQ Task Dispatcher
 
-A high-performance C++23 application that processes JSONRPC requests over ZeroMQ's PUB/SUB pattern, designed to run in a Docker container. The server listens for RPC commands from ZeroMQ compatible PUB clients (can be written in any language), distributes work to a thread pool, and publishes responses, errors, and logs back to the client. It targets minimal end-to-end latency and tries to follow SOLID principles for maintainability and extensibility.
+![CMake](https://img.shields.io/badge/CMake-3.15+-blue.svg)
+![C++23](https://img.shields.io/badge/C++-23-red.svg)
+![ZeroMQ](https://img.shields.io/badge/ZeroMQ-4.3+-blueviolet.svg)
+
+A high-performance C++23 application that processes requests over ZeroMQ's PUB/SUB pattern, designed to run in a Docker container. The server listens for RPC commands from ZeroMQ compatible PUB clients (can be written in any language), distributes work to a thread pool, and publishes responses, errors, and logs back to the client. It targets minimal end-to-end latency and tries to follow SOLID principles for maintainability and extensibility.
 
 With this you can build asynchronous task distribution systems, such as streaming media processing applications.
 
-This server uses a modular C++23 architecture with a ZeroMQ SUB socket to receive JSONRPC requests (e.g., launchPipeline) from any ZeroMQ client (e.g. Node.js client) and a ZeroMQ PUB socket to send back responses, errors, and logs, all asynchronously. Requests are parsed with `simdjson` and dispatched via a `std::unordered_map` to a `BS::thread_pool` for processing, ensuring optimal latency. Logs are sent as JSONRPC notifications over the PUB socket. The server uses `zmq::poll()` efficiently by waiting for both the SUB socket and a ZMQ_PAIR sockets for shutdown signals, enabling efficient, indefinite blocking (thus no CPU cycles get wasted for frequent timeouts). 
+This server uses a modular C++23 architecture with a ZeroMQ SUB socket to receive requests from any ZeroMQ client (e.g. Node.js client) and a ZeroMQ PUB socket to send back responses, errors, and logs, all asynchronously. Requests are parsed with `simdjson` and dispatched via a `std::unordered_map` to a `BS::thread_pool` for processing, ensuring optimal latency. Logs are sent as JSONRPC notifications over the PUB socket. The server uses `zmq::poll()` efficiently by waiting for both the SUB socket and a ZMQ_PAIR sockets for shutdown signals, enabling efficient, indefinite blocking (thus no CPU cycles get wasted for frequent timeouts). 
 
 ```mermaid
 graph TD
