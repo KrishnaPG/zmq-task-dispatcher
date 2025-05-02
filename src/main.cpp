@@ -197,7 +197,9 @@ int main()
                     Message message = parseMessage(std::move(msg)); 
                     std::cout << "Received type " << message.raw_msg << std::endl;
 
-                    // TODO: send the message to thread pool to get the work done
+                    // TODO: 
+                    //  1. send ACK to the sender that we received the message.
+                    //  2. send the message to thread pool to get the work done.
                 }
             }
         }
