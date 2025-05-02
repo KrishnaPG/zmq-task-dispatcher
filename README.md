@@ -45,6 +45,17 @@ graph TD
 - Node.js client with ZeroMQ support (binds SUB socket at `tcp://*:5555`, connects to PUB socket at `tcp://<container>:5556`).
 - Tracy client (optional, for profiling when `--benchmark` is enabled).
 
+For Windows, use `vcpkg` to install:
+```sh
+vcpkg install zeromq
+vcpkg install cppzmq
+
+# optional
+vcpkg install tracy
+vcpkg install gtest
+```
+On Linux based machines, `pkg-config` is needed to locate the ZeroMQ libraries. Refer the `Dockerfile` for more details on how to get the pre-requisites installed.
+
 ## Setup
 
 1. **Clone the Repository**:

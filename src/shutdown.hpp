@@ -1,7 +1,8 @@
 #pragma once
 #include <cstdint>
-#include "deps/cppzmq/zmq.hpp"
+#include <zmq.hpp>
 
+// ZMQ_PAIR sockets connect on this address to signal shutdown
 #define SHUTDOWN_INPROC_ADDR "inproc://shutdown"
 
 // returns true if global shutdown signal has been set to TRUE

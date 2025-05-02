@@ -2,36 +2,71 @@
 #include <iostream>
 #include <variant>
 #include <stdexcept>
-#include "deps/cppzmq/zmq.hpp"
+#include <zmq.hpp>
 #include "shutdown.hpp"
 #include "tracer.hpp"
-#include "worker-pool.hpp"
 
-// Message types
+/**
+    These are sample message structures. You can define your own.
+ */
+
 enum class MessageType : uint8_t
 {
     AUDIO,
     VIDEO,
-    CONTROL
+    CONTROL,
+    SHUTDOWN
 };
 
-// Payload structures (zero-copy)
 struct AudioPayload
 {
-    std::string_view data;      // Variable-length data
-    std::string_view sampleRate; // 4-byte field
+    int32_t sample_rate;
+    std::string_view data; // variable length payload should come last
+
+    // Zero-copy construction from zmq::message_t
+    static AudioPayload from_zmq_msg(const zmq::message_t& msg)
+    {
+        constexpr size_t METADATA_SIZE = sizeof(AudioPayload::sample_rate);
+        assert(msg.size() >= METADATA_SIZE);  // Optional runtime check
+
+        const char* ptr = static_cast<const char*>(msg.data());
+        return {
+            *std::bit_cast<decltype(AudioPayload::sample_rate)*>(ptr),
+            std::string_view(ptr + METADATA_SIZE, msg.size() - METADATA_SIZE),
+        };
+    }
 };
 
 struct VideoPayload
 {
-    std::string_view data;   // Variable-length data
-    std::string_view width;  // 4-byte field
-    std::string_view height; // 4-byte field
+    int32_t width;
+    int32_t height;
+    std::string_view data;  // variable length payload should come last
+
+    static VideoPayload from_zmq_msg(const zmq::message_t& msg)
+    {
+        constexpr size_t METADATA_SIZE = sizeof(VideoPayload::width) + sizeof(VideoPayload::height);
+        assert(msg.size() >= METADATA_SIZE);  // Optional runtime check
+
+        const char* ptr = static_cast<const char*>(msg.data());
+        return {
+            *std::bit_cast<decltype(VideoPayload::width)*>(ptr),
+            *std::bit_cast<decltype(VideoPayload::height)*>(ptr + sizeof(VideoPayload::width)),
+            std::string_view(ptr + METADATA_SIZE, msg.size() - METADATA_SIZE),
+        };
+    }
 };
 
 struct ControlPayload
 {
-    std::string_view command; // Variable-length data
+    std::string_view command;
+
+    static ControlPayload from_zmq_msg(const zmq::message_t& msg)
+    {
+        return {
+            std::string_view(static_cast<const char*>(msg.data()), msg.size())
+        };
+    }
 };
 
 // Message variant
@@ -41,33 +76,20 @@ struct Message
 {
     MessageType type;
     PayloadVariant payload;
-    zmq::message_t raw_msg; // Keep buffer alive
+    zmq::message_t raw_msg; // Maintains ownership for zero-copy
 };
 
 // Function prototypes (inline for performance)
 inline void processAudio(const AudioPayload& payload)
 {
-    // Interpret sampleRate as int32_t directly
-    if (payload.sampleRate.size() != sizeof(int32_t))
-    {
-        throw std::runtime_error("Invalid sampleRate size");
-    }
-    int32_t sampleRate = *reinterpret_cast<const int32_t*>(payload.sampleRate.data());
-    std::cout << "Processing audio: sampleRate=" << sampleRate
+     std::cout << "Processing audio: sampleRate=" << payload.sample_rate
         << ", data=" << payload.data << '\n';
 }
 
 inline void processVideo(const VideoPayload& payload)
 {
-    // Interpret width and height as int32_t directly
-    if (payload.width.size() != sizeof(int32_t) || payload.height.size() != sizeof(int32_t))
-    {
-        throw std::runtime_error("Invalid width/height size");
-    }
-    int32_t width = *reinterpret_cast<const int32_t*>(payload.width.data());
-    int32_t height = *reinterpret_cast<const int32_t*>(payload.height.data());
-    std::cout << "Processing video: width=" << width
-        << ", height=" << height
+    std::cout << "Processing video: width=" << payload.width
+        << ", height=" << payload.height
         << ", data=" << payload.data << '\n';
 }
 
@@ -123,9 +145,6 @@ int main()
     // Initialize ZeroMQ zmq_ctx with single IO thread
     zmq::context_t zmq_ctx { 1 };
 
-    // Create worker pool
-    WorkerPool worker_pool(zmq_ctx, std::thread::hardware_concurrency());
-
     // setup shutdown signaling
     setup_shutdown_handlers(zmq_ctx);
     
@@ -169,15 +188,14 @@ int main()
                 {
                     zmq::message_t msg;
                     auto result = subscriber.recv(msg, zmq::recv_flags::dontwait);
-                    if (shouldExit() || !result.has_value()) break; // No more messages
-
+                    if (shouldExit() || !result.has_value())
+                    {
+                        break; // No more messages
+                    }
                     // Parse and dispatch with zero-copy
                     Message message = parseMessage(std::move(msg));
 
-                    if (!worker_pool.dispatch(std::move(message))) {
-                        std::cerr << "Failed to dispatch message, notifying external caller\n";
-                        // TODO: Send error message to external caller (e.g., via ZeroMQ PUB socket)
-                    }                                        
+                    // TODO: send the message to thread pool to get the work done
                 }
             }
         }
