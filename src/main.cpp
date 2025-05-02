@@ -110,32 +110,33 @@ Message parseMessage(zmq::message_t&& msg)
     }
 
     MessageType type = static_cast<MessageType>(buffer[0]);
+    return Message { type, {}, std::move(msg) };
 
-    switch (type)
-    {
-    case MessageType::AUDIO:
-    {
-        if (size < 5) throw std::runtime_error("Invalid audio message");
-        std::string_view sampleRate(buffer + 1, sizeof(int32_t));
-        std::string_view data(buffer + 5, size - 5);
-        return { type, AudioPayload{data, sampleRate}, std::move(msg) };
-    }
-    case MessageType::VIDEO:
-    {
-        if (size < 9) throw std::runtime_error("Invalid video message");
-        std::string_view width(buffer + 1, sizeof(int32_t));
-        std::string_view height(buffer + 5, sizeof(int32_t));
-        std::string_view data(buffer + 9, size - 9);
-        return { type, VideoPayload{data, width, height}, std::move(msg) };
-    }
-    case MessageType::CONTROL:
-    {
-        std::string_view command(buffer + 1, size - 1);
-        return { type, ControlPayload{command}, std::move(msg) };
-    }
-    default:
-        throw std::runtime_error("Unknown message type");
-    }
+    //switch (type)
+    //{
+    //case MessageType::AUDIO:
+    //{
+    //    if (size < 5) throw std::runtime_error("Invalid audio message");
+    //    int32_t sampleRate(buffer + 1, sizeof(int32_t));
+    //    int32_t data(buffer + 5, size - 5);
+    //    return { type, AudioPayload{sampleRate, data}, std::move(msg) };
+    //}
+    //case MessageType::VIDEO:
+    //{
+    //    if (size < 9) throw std::runtime_error("Invalid video message");
+    //    std::string_view width(buffer + 1, sizeof(int32_t));
+    //    std::string_view height(buffer + 5, sizeof(int32_t));
+    //    std::string_view data(buffer + 9, size - 9);
+    //    return { type, VideoPayload{width, height, data}, std::move(msg) };
+    //}
+    //case MessageType::CONTROL:
+    //{
+    //    std::string_view command(buffer + 1, size - 1);
+    //    return { type, ControlPayload{command}, std::move(msg) };
+    //}
+    //default:
+    //    throw std::runtime_error("Unknown message type");
+    //}
 }
 
 int main()
@@ -193,7 +194,8 @@ int main()
                         break; // No more messages
                     }
                     // Parse and dispatch with zero-copy
-                    Message message = parseMessage(std::move(msg));
+                    Message message = parseMessage(std::move(msg)); 
+                    std::cout << "Received type " << message.raw_msg << std::endl;
 
                     // TODO: send the message to thread pool to get the work done
                 }

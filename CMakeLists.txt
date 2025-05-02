@@ -52,8 +52,7 @@ SET(SourceFiles
     )
 
 SET(3rdPartyFiles 
-    src/deps/cppzmq/zmq.hpp 
-    src/deps/cppzmq/zmq_addon.hpp
+    src/deps/thread-pool/BS_thread_pool.hpp
     )
 
 SOURCE_GROUP(Header_Files 	FILES ${HeaderFiles})
