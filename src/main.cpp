@@ -20,7 +20,7 @@ enum class MessageType : uint8_t
 
 struct AudioPayload
 {
-    int32_t sample_rate;
+    int32_t sample_rate=0;
     std::string_view data; // variable length payload should come last
 
     // Zero-copy construction from zmq::message_t
@@ -162,6 +162,15 @@ int main()
     subscriber.set(zmq::sockopt::linger, 0);            // after close, die immediately
     subscriber.connect("tcp://localhost:5555");
     subscriber.set(zmq::sockopt::subscribe, "");        // receive all topics
+
+    // setup Publisher for Acks, Results, Logs and Notifications
+    zmq::socket_t publisher(zmq_ctx, ZMQ_PUB);
+    // set socket options for performance
+    publisher.set(zmq::sockopt::sndbuf, 1024 * 1024);  // 1MB send buffer
+    publisher.set(zmq::sockopt::sndhwm, 1000);         // High-water mark
+    publisher.set(zmq::sockopt::linger, 0);            // after close, die immediately
+    publisher.set(zmq::sockopt::immediate, 1);         // drop messages if client is not fully connected
+    publisher.bind("tcp://localhost:5556");
 
     std::cout << "Server started listening for commands" << std::endl;
 
