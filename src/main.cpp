@@ -5,6 +5,7 @@
 #include <zmq.hpp>
 #include "shutdown.hpp"
 #include "tracer.hpp"
+#include "deps/thread-pool/BS_thread_pool.hpp"
 
 /**
     These are sample message structures. You can define your own.
@@ -160,7 +161,7 @@ int main()
     subscriber.set(zmq::sockopt::rcvbuf, 1024 * 1024);  // 1MB receive buffer
     subscriber.set(zmq::sockopt::rcvhwm, 1000);         // High-water mark
     subscriber.set(zmq::sockopt::linger, 0);            // after close, die immediately
-    subscriber.connect("tcp://localhost:5555");
+    subscriber.bind("tcp://localhost:5555");
     subscriber.set(zmq::sockopt::subscribe, "");        // receive all topics
 
     // setup Publisher for Acks, Results, Logs and Notifications
@@ -171,6 +172,9 @@ int main()
     publisher.set(zmq::sockopt::linger, 0);            // after close, die immediately
     publisher.set(zmq::sockopt::immediate, 1);         // drop messages if client is not fully connected
     publisher.bind("tcp://localhost:5556");
+
+    // Initialize thread pool with number of hardware threads
+    BS::thread_pool pool { std::thread::hardware_concurrency() };
 
     std::cout << "Server started listening for commands" << std::endl;
 
@@ -209,6 +213,26 @@ int main()
                     // TODO: 
                     //  1. send ACK to the sender that we received the message.
                     //  2. send the message to thread pool to get the work done.
+                    std::move_only_function<void()> task = [msg = std::move(message)]() noexcept
+                        {
+                            TRACY_ZONE_NAMED("thread pool task");
+                            try
+                            {
+
+                            }
+                            catch (const std::exception& e)
+                            {
+                                std::cerr << "Error processing the message: " << e.what() << std::endl;
+                            }
+                        };
+                    try
+                    {
+                        pool.submit_task(std::move(task));
+                    }
+                    catch (const std::exception& e)
+                    {
+                        std::cerr << "Failed to submit task to thread pool: " << e.what() << std::endl;
+                    }
                 }
             }
         }
@@ -222,6 +246,9 @@ int main()
             std::cerr << "Error: " << e.what() << '\n';
         }
     }
+
+    std::cout << "Shutting down, waiting for thread pool to complete" << std::endl;
+    pool.wait();
 
     std::cout << "Server has shut down" << std::endl;
     return 0;
