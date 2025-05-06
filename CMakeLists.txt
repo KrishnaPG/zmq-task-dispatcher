@@ -41,6 +41,7 @@ endif(WIN32)
 find_package(cppzmq REQUIRED)
 
 SET(HeaderFiles 
+    src/messages.hpp
     src/shutdown.hpp
     src/tracer.hpp
     src/utils.hpp
@@ -48,6 +49,7 @@ SET(HeaderFiles
 
 SET(SourceFiles 
     src/main.cpp
+    src/messages.cpp
     src/shutdown.cpp
     )
 

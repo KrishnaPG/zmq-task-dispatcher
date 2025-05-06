@@ -1,4 +1,4 @@
-import zmq from "zeromq";
+import zmq, { Subscriber } from "zeromq";
 
 // Message types matching C++ enum
 const MessageType = {
@@ -15,9 +15,18 @@ const publisher = new zmq.Publisher({
   immediate: true
 });
 
-// Pub Binds, Sub Connects
-await publisher.bind("tcp://localhost:5555");
+// Long-living sockets Bind, Short-living sockets connect.
+// In this case, this app is short-living so, just connect.
+await publisher.connect("tcp://localhost:5555");
 console.log("Started work producer on tcp://localhost:5555");
+
+// Listen to the notifications, acks from the Service
+const subsciber = new zmq.Subscriber({
+  linger: 0,
+  immediate: true,
+});
+await subsciber.connect("tcp://localhost:5556");
+subsciber.subscribe(""); // subscribe to all
 
 /**
  * TODO: implement wait for the ack from the sub for the messages received.
@@ -26,7 +35,7 @@ console.log("Started work producer on tcp://localhost:5555");
  * We have Wait for the Sub to acknowledge the message (in JSONRPC kind of style).
  */
 
-let nCounter = 0;
+let nCounter = 0, bIsWaitingForReceive = false;
 // Send messages periodically
 setInterval(async () => {
   nCounter++;
@@ -63,10 +72,21 @@ setInterval(async () => {
   } catch (err: any) {
     console.error("Error", err.message);
   }
+
+  // Check for incoming messages
+  if (!bIsWaitingForReceive) {
+    bIsWaitingForReceive = true;
+    const x = await subsciber.receive().then(() => {
+      bIsWaitingForReceive = false;
+    });
+    console.log("received: ", x);
+  }
+
 }, 1000);
 
 const shutdown = () => {
   publisher.close();
+  subsciber.close();
   console.log("Publisher closed");
   process.exit(0);  
 }
