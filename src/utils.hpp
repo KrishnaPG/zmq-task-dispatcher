@@ -1,5 +1,5 @@
 #pragma once
-#include "deps/cppzmq/zmq.hpp"
+#include <zmq.hpp>
 #include <functional>
 #include <chrono>
 #include <thread>

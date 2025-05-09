@@ -1,7 +1,4 @@
-#include "shutdown.hpp"
-#include "tracer.hpp"
-#include <csignal>
-#include <iostream>
+#include "headers.hpp"
 
 volatile bool gbShouldExit = false;
 static zmq::socket_t g_shutdown_signaler;
@@ -27,7 +24,10 @@ void setup_shutdown_handlers(zmq::context_t& zmq_ctx)
 void request_shutdown(int sig)
 {
     std::cout << "Signal [" << sig << "] received" << std::endl;
-    gbShouldExit = true;
-    g_shutdown_signaler.send(zmq::message_t("1", 1), zmq::send_flags::dontwait);
-    g_shutdown_signaler.close();
+    if (gbShouldExit == false)
+    {
+        gbShouldExit = true;
+        g_shutdown_signaler.send(zmq::message_t("1", 1), zmq::send_flags::dontwait);
+        g_shutdown_signaler.close();
+    }
 }

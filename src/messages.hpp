@@ -1,8 +1,4 @@
 #pragma once
-#include <zmq.hpp>
-#include <string_view>
-#include <variant>
-
 /**
     These are sample message structures. You can define your own.
  */

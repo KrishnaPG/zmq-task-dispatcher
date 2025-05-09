@@ -1,19 +1,18 @@
-#include <map>
-#include <stdexcept>
-#include "messages.hpp"
-#include "shutdown.hpp"
-#include "tracer.hpp"
-#include "deps/thread-pool/BS_thread_pool.hpp"
+
+#include "custom-memory.hpp"  // should come first
+#include "headers.hpp"
 
 // Globals
 const char* szCmdSubAddress = "tcp://localhost:5555";
 const char* szLogPubAddress = "tcp://localhost:5556";
+
 // Initialize ZeroMQ zmq_ctx with single IO thread
 static zmq::context_t zmq_ctx { 1 };
+
 // Publishers for Acks, Results etc.. one for each thread
 static std::map<decltype(std::this_thread::get_id()), zmq::socket_t> gThread_pub_sockets;
 
-zmq::socket_t create_pub_socket(zmq::context_t& ctx, const char* address, bool bBind = false)
+zmq::socket_t create_pub_socket(zmq::context_t& ctx, const char* address, bool bBind)
 {
     zmq::socket_t publisher(ctx, ZMQ_PUB);
     // set socket options for performance
@@ -25,9 +24,13 @@ zmq::socket_t create_pub_socket(zmq::context_t& ctx, const char* address, bool b
     return std::move(publisher);
 }
 
+#define ONEGB	((uint64_t)1 << 30)
+
 int main()
 {
     TRACY_ZONE;
+    // reserve memory 
+    mi_reserve_os_memory(ONEGB, false /*commit*/, true /*allow large*/);
 
     // setup shutdown signaling
     setup_shutdown_handlers(zmq_ctx);
@@ -47,11 +50,12 @@ int main()
     zmq_cmd_listener.set(zmq::sockopt::subscribe, "");        // receive all topics
 
     // setup Publisher for Acks, Results, Logs and Notifications for the main thread
-    zmq::socket_t publisher = create_pub_socket(zmq_ctx, szLogPubAddress, true);
+    zmq::socket_t zmq_ack_publisher = create_pub_socket(zmq_ctx, szLogPubAddress, true);
 
     // Initialize thread pool with number of hardware threads
-    BS::thread_pool pool(std::thread::hardware_concurrency(), [](){
-        gThread_pub_sockets[std::this_thread::get_id()] = std::move(create_pub_socket(zmq_ctx, szLogPubAddress));
+    BS::thread_pool pool(1, [](){
+        // thread initialization function, runs once for each thread
+        gThread_pub_sockets[std::this_thread::get_id()] = std::move(create_pub_socket(zmq_ctx, szLogPubAddress, false));
     });
 
     std::cout << "Server started listening for commands" << std::endl;
@@ -67,7 +71,17 @@ int main()
         try
         {
             // Wait indefinitely either till a message or SIG event received
-            zmq::poll(items, std::chrono::milliseconds { -1 });
+            zmq::poll(items, std::chrono::milliseconds { 1000 });  //zmq_ack_publisher.send(zmq::message_t("From main"), zmq::send_flags::dontwait);
+
+            pool.detach_task([]()
+                {
+                    // retrieve this thread's pub socket
+                    auto iter = gThread_pub_sockets.find(std::this_thread::get_id());
+                    assert(iter != gThread_pub_sockets.end());
+                    zmq::socket_t& zmq_ack_publisher = iter->second;
+
+                    zmq_ack_publisher.send(zmq::message_t("inside the threAD"), zmq::send_flags::dontwait);
+                }); // fire and forget
 
             // Check for shutdown
             if (items[1].revents & ZMQ_POLLIN)
@@ -105,6 +119,10 @@ int main()
                                 std::cout << "Inside Task" << std::endl;
                                 zmq_ack_publisher.send(zmq::message_t("Inside Task"), zmq::send_flags::dontwait);
                             }
+                            catch (const zmq::error_t& e)
+                            {
+                                std::cerr << "ZeroMQ error: " << e.what() << '\n';
+                            }
                             catch (const std::exception& e)
                             {
                                 std::cerr << "Error processing the message: " << e.what() << std::endl;
@@ -134,6 +152,9 @@ int main()
 
     std::cout << "Shutting down, waiting for thread pool to complete" << std::endl;
     pool.wait();
+
+    // print memory usage statistics
+    mi_stats_print_out(NULL, NULL);
 
     std::cout << "Server has shut down" << std::endl;
     return 0;

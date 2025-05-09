@@ -40,8 +40,38 @@ endif(WIN32)
 # Find C++ header for ZeroMQ
 find_package(cppzmq REQUIRED)
 
+# Add BS::thread_pool (a header-only library)
+include(FetchContent)
+FetchContent_Declare(
+    bs_thread_pool
+    GIT_REPOSITORY https://github.com/bshoshany/thread-pool.git
+    GIT_TAG v5.0.0
+)
+FetchContent_MakeAvailable(bs_thread_pool)
+set(BS_THREAD_POOL_INCLUDE_DIRS ${bs_thread_pool_SOURCE_DIR}/include/)
+
+# Add FMT
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 11.2.0
+)
+FetchContent_MakeAvailable(fmt)
+
+# Add MiMalloc
+FetchContent_Declare(
+    mimalloc 
+    GIT_REPOSITORY https://github.com/microsoft/mimalloc.git
+    GIT_TAG v3.0.3
+)
+FetchContent_MakeAvailable(mimalloc)
+set(MIMALLOC_INCLUDE_DIRS ${mimalloc_SOURCE_DIR}/include/)
+
 SET(HeaderFiles 
+    src/custom-memory.hpp
+    src/headers.hpp
     src/messages.hpp
+    src/mpsc_queue.hpp
     src/shutdown.hpp
     src/tracer.hpp
     src/utils.hpp
@@ -54,7 +84,6 @@ SET(SourceFiles
     )
 
 SET(3rdPartyFiles 
-    src/deps/thread-pool/BS_thread_pool.hpp
     )
 
 SOURCE_GROUP(Header_Files 	FILES ${HeaderFiles})
@@ -65,13 +94,19 @@ add_executable(zmq-task-dispatcher ${HeaderFiles} ${SourceFiles} ${3rdPartyFiles
 
 target_include_directories(zmq-task-dispatcher PRIVATE
     ${ZeroMQ_INCLUDE_DIRS}
+    ${BS_THREAD_POOL_INCLUDE_DIRS}
+    ${MIMALLOC_INCLUDE_DIRS}
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include> # these dirs are only used when building inside the build tree
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> # these dirs are only used when linking against a prebuilt version of your package
 )
 
 target_compile_options(zmq-task-dispatcher PRIVATE ${TracyCompileOptions})
 
 target_link_libraries(zmq-task-dispatcher PRIVATE
     ${ZeroMQ_LIBRARIES}
-    ${Tracy_LIBRARIES}
+    ${Tracy_LIBRARIES}  
+    fmt
+    mimalloc-static 
 )
 
