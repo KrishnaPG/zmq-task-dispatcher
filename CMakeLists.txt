@@ -71,6 +71,7 @@ SET(HeaderFiles
     src/custom-memory.hpp
     src/headers.hpp
     src/messages.hpp
+    src/methods.hpp
     src/mpsc_queue.hpp
     src/shutdown.hpp
     src/tracer.hpp
@@ -80,6 +81,7 @@ SET(HeaderFiles
 SET(SourceFiles 
     src/main.cpp
     src/messages.cpp
+    src/methods.cpp
     src/shutdown.cpp
     )
 

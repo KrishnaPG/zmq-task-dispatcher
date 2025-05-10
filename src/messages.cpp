@@ -5,19 +5,6 @@
         { handleMethod(method_params);  };  \
     m_threadPool.detach_task(std::move(task)); // fire and forget
 
-
-template<>
-void handleMethod<MethodID::GStreamer_Pipeline_Start>(const MethodParams<MethodID::GStreamer_Pipeline_Start>& params)
-{
-    std::cout << "GStreamer_Pipeline_Start" << std::endl;
-}
-
-template<>
-void handleMethod<MethodID::GStreamer_Pipeline_Stop>(const MethodParams<MethodID::GStreamer_Pipeline_Stop>& params)
-{
-    std::cout << "GStreamer_Pipeline_Stop" << std::endl;
-}
-
 // Parse params with zero-copy and dispatch to the thread-pool for execution
 void MessageHandler::handle_incoming_message(zmq::message_t&& msg)
 {
@@ -34,7 +21,7 @@ void MessageHandler::handle_incoming_message(zmq::message_t&& msg)
 
     // TODO: 
     //  1. send ACK to the sender that we received the message.
-    this->m_publisher.send();
+    this->sendAck(pParamsBase);
     //  2. send the message to thread pool to get the work done.
     
     // Create a dispatcher that calls the appropriate handle method
@@ -82,4 +69,23 @@ void MessageHandler::handle_incoming_message(zmq::message_t&& msg)
     }
     
     return;
+}
+
+void no_delete(void* data, void* hint)
+{
+    // Custom free function that does nothing, preventing deallocation
+}
+
+void MessageHandler::sendAck(const ParamsBase* pParamsBase)
+{
+    // reuse buffer
+    MessageHandler::ackBuf.clear();
+    fmt::format_to(std::back_inserter(MessageHandler::ackBuf),
+        R"({{"jsonrpc":"2.0","id":"{}"}})",
+        pParamsBase->req_id
+    );
+    // reuse the ackBuf for the zmq::message_t
+    zmq::message_t ack(ackBuf.data(), ackBuf.size(), no_delete, nullptr);
+    // zero-copy call with async fire and forget mode
+    this->m_publisher.send(std::move(ack), zmq::send_flags::dontwait);
 }

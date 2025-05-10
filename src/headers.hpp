@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <csignal>
+#include <fmt/format.h>
 #include <iostream>
 #include <map>
 #include <string_view>
@@ -12,6 +13,7 @@
 
 #include "BS_thread_pool.hpp"
 
+#include "methods.hpp"
 #include "messages.hpp"
 #include "mpsc_queue.hpp"
 #include "shutdown.hpp"
