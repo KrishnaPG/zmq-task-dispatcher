@@ -50,13 +50,7 @@ int main()
     zmq_cmd_listener.set(zmq::sockopt::subscribe, "");        // receive all topics
 
     // setup Publisher for Acks, Results, Logs and Notifications for the main thread
-    zmq::socket_t zmq_ack_publisher = create_pub_socket(zmq_ctx, szLogPubAddress, true);
-
-    // Initialize thread pool with number of hardware threads
-    BS::thread_pool pool(1, [](){
-        // thread initialization function, runs once for each thread
-        gThread_pub_sockets[std::this_thread::get_id()] = std::move(create_pub_socket(zmq_ctx, szLogPubAddress, false));
-    });
+    MessageHandler msgHandler(create_pub_socket(zmq_ctx, szLogPubAddress, true));
 
     std::cout << "Server started listening for commands" << std::endl;
 
@@ -71,17 +65,7 @@ int main()
         try
         {
             // Wait indefinitely either till a message or SIG event received
-            zmq::poll(items, std::chrono::milliseconds { 1000 });  //zmq_ack_publisher.send(zmq::message_t("From main"), zmq::send_flags::dontwait);
-
-            pool.detach_task([]()
-                {
-                    // retrieve this thread's pub socket
-                    auto iter = gThread_pub_sockets.find(std::this_thread::get_id());
-                    assert(iter != gThread_pub_sockets.end());
-                    zmq::socket_t& zmq_ack_publisher = iter->second;
-
-                    zmq_ack_publisher.send(zmq::message_t("inside the threAD"), zmq::send_flags::dontwait);
-                }); // fire and forget
+            zmq::poll(items, std::chrono::milliseconds { -1 });  //zmq_ack_publisher.send(zmq::message_t("From main"), zmq::send_flags::dontwait);
 
             // Check for shutdown
             if (items[1].revents & ZMQ_POLLIN)
@@ -99,43 +83,42 @@ int main()
                         break; // No more messages
                     }
                     // Parse and dispatch with zero-copy
-                    Message message = parseMessage(std::move(msg)); 
-                    std::cout << "Received type " << message.raw_msg << std::endl;
+                    msgHandler.handle_incoming_message(std::move(msg));
 
                     // TODO: 
                     //  1. send ACK to the sender that we received the message.
                     //  2. send the message to thread pool to get the work done.
-                    std::move_only_function<void()> task = [msg = std::move(message)]() noexcept
-                        {
-                            TRACY_ZONE_NAMED("thread pool task");
+                    //std::move_only_function<void()> task = [msg = std::move(message)]() noexcept
+                    //    {
+                    //        TRACY_ZONE_NAMED("thread pool task");
 
-                            // retrieve this thread's pub socket
-                            auto iter = gThread_pub_sockets.find(std::this_thread::get_id());
-                            assert(iter != gThread_pub_sockets.end());
-                            zmq::socket_t& zmq_ack_publisher = iter->second;
+                    //        // retrieve this thread's pub socket
+                    //        auto iter = gThread_pub_sockets.find(std::this_thread::get_id());
+                    //        assert(iter != gThread_pub_sockets.end());
+                    //        zmq::socket_t& zmq_ack_publisher = iter->second;
 
-                            try
-                            {
-                                std::cout << "Inside Task" << std::endl;
-                                zmq_ack_publisher.send(zmq::message_t("Inside Task"), zmq::send_flags::dontwait);
-                            }
-                            catch (const zmq::error_t& e)
-                            {
-                                std::cerr << "ZeroMQ error: " << e.what() << '\n';
-                            }
-                            catch (const std::exception& e)
-                            {
-                                std::cerr << "Error processing the message: " << e.what() << std::endl;
-                            }
-                        };
-                    try
-                    {
-                        pool.detach_task(std::move(task)); // fire and forget
-                    }
-                    catch (const std::exception& e)
-                    {
-                        std::cerr << "Failed to submit task to thread pool: " << e.what() << std::endl;
-                    }
+                    //        try
+                    //        {
+                    //            std::cout << "Inside Task" << std::endl;
+                    //            zmq_ack_publisher.send(zmq::message_t("Inside Task"), zmq::send_flags::dontwait);
+                    //        }
+                    //        catch (const zmq::error_t& e)
+                    //        {
+                    //            std::cerr << "ZeroMQ error: " << e.what() << '\n';
+                    //        }
+                    //        catch (const std::exception& e)
+                    //        {
+                    //            std::cerr << "Error processing the message: " << e.what() << std::endl;
+                    //        }
+                    //    };
+                    //try
+                    //{
+                    //    pool.detach_task(std::move(task)); // fire and forget
+                    //}
+                    //catch (const std::exception& e)
+                    //{
+                    //    std::cerr << "Failed to submit task to thread pool: " << e.what() << std::endl;
+                    //}
                 }
             }
         }
@@ -151,7 +134,6 @@ int main()
     }
 
     std::cout << "Shutting down, waiting for thread pool to complete" << std::endl;
-    pool.wait();
 
     // print memory usage statistics
     mi_stats_print_out(NULL, NULL);

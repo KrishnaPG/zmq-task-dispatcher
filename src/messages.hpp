@@ -3,12 +3,80 @@
     These are sample message structures. You can define your own.
  */
 
-enum class MessageType : uint8_t
+typedef std::uint64_t   TReqID;
+typedef std::uint8_t    TMethodID;
+typedef std::uint32_t   TPipelineID;
+
+struct ParamsBase
 {
+    TReqID req_id;
+    TMethodID method_id;
+};
+
+struct ParamsEnd
+{
+    zmq::message_t raw_msg; // Maintains ownership for zero-copy
+};
+
+enum class MethodID : TMethodID
+{
+    GStreamer_Pipeline_Start,
+    GStreamer_Pipeline_Pause,
+    GStreamer_Pipeline_Resume,
+    GStreamer_Pipeline_Stop,
     AUDIO,
     VIDEO,
     CONTROL,
-    SHUTDOWN
+    SHUTDOWN,
+    Unknown // dummy sentinel for validation (value < Methods::Unknown)
+};
+
+template<MethodID MID = MethodID::Unknown>
+struct Payload { };
+
+template<>
+struct Payload<MethodID::GStreamer_Pipeline_Start>
+{
+    std::string_view pipeline_config;
+};
+
+template<>
+struct Payload<MethodID::GStreamer_Pipeline_Stop>
+{
+    TPipelineID pipeline_id;
+};
+template<>
+struct Payload<MethodID::GStreamer_Pipeline_Pause>
+{
+    TPipelineID pipeline_id;
+};
+template<>
+struct Payload<MethodID::GStreamer_Pipeline_Resume>
+{
+    TPipelineID pipeline_id;
+};
+
+template<MethodID MID = MethodID::Unknown>
+struct MethodParams : public Payload<MID>, ParamsEnd { };
+
+template<MethodID MID = MethodID::Unknown>
+void handleMethod(const MethodParams<MID>& params) { std::cerr << "Unknown Method" << std::endl; }
+
+
+enum class GSPipelineOp : uint8_t
+{
+    Start, 
+    Pause,
+    Resume,
+    Stop,
+    List,
+    StopAll,
+    Unknown // dummy sentinel for validation (value < GSPipelineOp::Unknown)
+};
+
+struct GStreamPipelineFn
+{
+    GSPipelineOp op;
 };
 
 struct AudioPayload
@@ -67,9 +135,23 @@ using PayloadVariant = std::variant<AudioPayload, VideoPayload, ControlPayload>;
 
 struct Message
 {
-    MessageType type;
+    //MessageType type;
     PayloadVariant payload;
     zmq::message_t raw_msg; // Maintains ownership for zero-copy
 };
 
-Message parseMessage(zmq::message_t&& msg);
+
+// parses and runs the messages received on ZMQ socket from clients.
+// Automatically closes the publisher socket and waits for pending 
+// tasks at the time of destruction.
+class MessageHandler
+{
+    BS::thread_pool<> m_threadPool;
+    zmq::socket_t m_publisher;
+public:
+    inline MessageHandler(zmq::socket_t&& publisher):
+        m_threadPool(std::thread::hardware_concurrency()), 
+        m_publisher(std::move(publisher))
+    { }
+    void handle_incoming_message(zmq::message_t&& msg);
+};

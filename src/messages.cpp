@@ -1,62 +1,85 @@
 #include "headers.hpp"
 
-// Function prototypes (inline for performance)
-inline void processAudio(const AudioPayload& payload)
+#define RUN_TASK_IN_POOL  \
+    std::move_only_function<void()> task = [method_params = std::move(params)]() noexcept \
+        { handleMethod(method_params);  };  \
+    m_threadPool.detach_task(std::move(task)); // fire and forget
+
+
+template<>
+void handleMethod<MethodID::GStreamer_Pipeline_Start>(const MethodParams<MethodID::GStreamer_Pipeline_Start>& params)
 {
-    std::cout << "Processing audio: sampleRate=" << payload.sample_rate
-        << ", data=" << payload.data << '\n';
+    std::cout << "GStreamer_Pipeline_Start" << std::endl;
 }
 
-inline void processVideo(const VideoPayload& payload)
+template<>
+void handleMethod<MethodID::GStreamer_Pipeline_Stop>(const MethodParams<MethodID::GStreamer_Pipeline_Stop>& params)
 {
-    std::cout << "Processing video: width=" << payload.width
-        << ", height=" << payload.height
-        << ", data=" << payload.data << '\n';
+    std::cout << "GStreamer_Pipeline_Stop" << std::endl;
 }
 
-inline void processControl(const ControlPayload& payload)
+// Parse params with zero-copy and dispatch to the thread-pool for execution
+void MessageHandler::handle_incoming_message(zmq::message_t&& msg)
 {
-    std::cout << "Processing control: command=" << payload.command << '\n';
-}
+    size_t msgSize = msg.size();
+    assert(msgSize > sizeof(ParamsBase) && "Message too small");
 
+    const ParamsBase* pParamsBase = static_cast<const ParamsBase*>(msg.data());
+    assert(pParamsBase->req_id && "Request ID cannot be NULL");
+    assert(pParamsBase->method_id < (TMethodID)MethodID::Unknown && "Invalid Method ID");
 
-// Parse message with zero-copy
-Message parseMessage(zmq::message_t&& msg)
-{
-    const char* buffer = static_cast<const char*>(msg.data());
-    size_t size = msg.size();
+    const char* pBuffer = static_cast<const char*>(msg.data());
+    const char* payload_start = pBuffer + sizeof(ParamsBase);
+    const size_t payload_size = msgSize - sizeof(ParamsBase);
 
-    if (size < 1)
+    // TODO: 
+    //  1. send ACK to the sender that we received the message.
+    this->m_publisher.send();
+    //  2. send the message to thread pool to get the work done.
+    
+    // Create a dispatcher that calls the appropriate handle method
+    switch (static_cast<MethodID>(pParamsBase->method_id))
     {
-        throw std::runtime_error("Invalid message: too short");
+        case MethodID::GStreamer_Pipeline_Start:
+        {
+            MethodParams<MethodID::GStreamer_Pipeline_Start> params { 
+                std::string_view(payload_start, payload_size), 
+                std::move(msg)
+            };
+            RUN_TASK_IN_POOL
+            break;
+        }
+        case MethodID::GStreamer_Pipeline_Stop:
+        {
+            MethodParams<MethodID::GStreamer_Pipeline_Stop> params {
+                *reinterpret_cast<const TPipelineID*>(payload_start),
+                std::move(msg)
+            };
+            RUN_TASK_IN_POOL
+                break;
+        }
+        case MethodID::GStreamer_Pipeline_Pause:
+        {
+            MethodParams<MethodID::GStreamer_Pipeline_Pause> params {
+                *reinterpret_cast<const TPipelineID*>(payload_start),
+                std::move(msg)
+            };
+            RUN_TASK_IN_POOL
+                break;
+        }
+        case MethodID::GStreamer_Pipeline_Resume:
+        {
+            MethodParams<MethodID::GStreamer_Pipeline_Resume> params {
+                *reinterpret_cast<const TPipelineID*>(payload_start),
+                std::move(msg)
+            };
+            RUN_TASK_IN_POOL
+                break;
+        }
+        default:
+            assert(false && "Unknown method ID");
+            break;
     }
-
-    MessageType type = static_cast<MessageType>(buffer[0]);
-    return Message { type, {}, std::move(msg) };
-
-    //switch (type)
-    //{
-    //case MessageType::AUDIO:
-    //{
-    //    if (size < 5) throw std::runtime_error("Invalid audio message");
-    //    int32_t sampleRate(buffer + 1, sizeof(int32_t));
-    //    int32_t data(buffer + 5, size - 5);
-    //    return { type, AudioPayload{sampleRate, data}, std::move(msg) };
-    //}
-    //case MessageType::VIDEO:
-    //{
-    //    if (size < 9) throw std::runtime_error("Invalid video message");
-    //    std::string_view width(buffer + 1, sizeof(int32_t));
-    //    std::string_view height(buffer + 5, sizeof(int32_t));
-    //    std::string_view data(buffer + 9, size - 9);
-    //    return { type, VideoPayload{width, height, data}, std::move(msg) };
-    //}
-    //case MessageType::CONTROL:
-    //{
-    //    std::string_view command(buffer + 1, size - 1);
-    //    return { type, ControlPayload{command}, std::move(msg) };
-    //}
-    //default:
-    //    throw std::runtime_error("Unknown message type");
-    //}
+    
+    return;
 }
