@@ -27,6 +27,10 @@ void MessageHandler::handle_incoming_message(zmq::message_t&& msg)
     //  1. send ACK to the sender that we received the message.
     this->sendAck(pParamsBase);
     //  2. send the message to thread pool to get the work done.
+
+    // TODO: use MPSC + Lock-free Object Pool to send logs/responses from 
+    // inside the threads to the main thread.
+    // The static buffers will not work across threads.
     
     // Create a dispatcher that calls the appropriate handle method
     switch (static_cast<MethodID>(pParamsBase->method_id))
@@ -73,6 +77,13 @@ void MessageHandler::handle_incoming_message(zmq::message_t&& msg)
     }
     
     return;
+}
+
+void MessageHandler::publish_outgoing_messages()
+{
+    // TODO: use MPSC + ObjectPool to pump responses from inside
+    // the thread pool tasks to here on main thread (to be published
+    // on ZMQ_PUB)
 }
 
 void no_delete(void* data, void* hint)
