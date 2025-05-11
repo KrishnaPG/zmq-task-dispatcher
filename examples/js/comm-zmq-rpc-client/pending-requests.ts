@@ -1,6 +1,6 @@
 import now from "@fict/utils/now";
 import Tracker from "@fict/utils/tracker";
-import { RPCError, ErrorFmt } from "@fict/utils/jsonrpc";
+import { RPCError, ErrorFmt } from "@fict/utils/json-rpc";
 
 export type TReqID = string | bigint;
 
@@ -41,8 +41,7 @@ export default class PendingRequests {
       if (t.timeSpent() < this.timeoutMS) {
         break; // Subsequent requests will be newer (Map maintains insertion order)
       }
-
-      t.cancel(RPCError(ErrorFmt.timeout("Request timed out"), id));
+      t.cancel(ErrorFmt.timeout("Request timed out"));
       this.remove(id);
     }
   }

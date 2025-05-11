@@ -21,6 +21,25 @@ graph TD
     F <--> H[SIG Events Handlers]
 ```
 
+## LockFree Object Pool
+
+| Feature | Description |
+|--------|-------------|
+| 🔒 Thread-safe & Lock-free Global Pool | CAS-based lock-free stack |
+| 🧠 Thread-local cache | Fast per-thread allocation |
+| 📦 Preallocated memory blocks | Zero dynamic allocations after init |
+| 💥 Placement new / explicit destructor calls | No overhead |
+| 🧩 Generic type support | Works with any movable `T` |
+| 🗑️ Memory reuse | Efficient and safe |
+| 🧺 Object reset hooks | Optional custom reset before reuse |
+| 📡 Hazard pointer safety (basic mitigation) | Prevents ABA issues via preallocation |
+| 🧱 `std::pmr` support | Custom memory resource integration |
+| 🔄 Background scavenger thread | Optionally moves from thread-cache to global |
+| 🪝 Custom deleter interface | Can be wrapped in `shared_ptr` or `unique_ptr` |
+| 🧰 Configurable constants | Easy tuning |
+
+---
+
 ## Features
 
 - **ZeroMQ PUB/SUB**: SUB socket receives JSONRPC requests; PUB socket sends responses, errors, and logs.

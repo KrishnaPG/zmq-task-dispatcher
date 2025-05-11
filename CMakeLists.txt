@@ -70,6 +70,7 @@ set(MIMALLOC_INCLUDE_DIRS ${mimalloc_SOURCE_DIR}/include/)
 SET(HeaderFiles 
     src/custom-memory.hpp
     src/headers.hpp
+    src/lockfree_object_pool.hpp
     src/messages.hpp
     src/methods.hpp
     src/mpsc_queue.hpp

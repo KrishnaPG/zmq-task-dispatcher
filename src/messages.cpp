@@ -23,7 +23,7 @@ void MessageHandler::handle_incoming_message(zmq::message_t&& msg)
     const char* payload_start = pBuffer + sizeof(ParamsBase);
     const size_t payload_size = msgSize - sizeof(ParamsBase);
 
-    // TODO: 
+    // Steps: 
     //  1. send ACK to the sender that we received the message.
     this->sendAck(pParamsBase);
     //  2. send the message to thread pool to get the work done.
@@ -85,7 +85,7 @@ void MessageHandler::sendAck(const ParamsBase* pParamsBase)
     // reuse buffer
     MessageHandler::ackBuf.clear();
     fmt::format_to(std::back_inserter(MessageHandler::ackBuf),
-        R"({{"jsonrpc":"2.0","ack":1,"id":"{}"}})",
+        R"({{"jsonrpc":"2.0","ack":1,"id":{}}})",
         pParamsBase->req_id
     );
     // reuse the ackBuf for the zmq::message_t
@@ -99,7 +99,7 @@ void MessageHandler::sendError(const ParamsBase* pParamsBase, zmq::error_t&& err
     // reuse buffer
     MessageHandler::errBuf.clear();
     fmt::format_to(std::back_inserter(MessageHandler::errBuf),
-        R"({{"jsonrpc":"2.0","id":"{}","error":{{ code:{}, message:"{}" }} }})",
+        R"({{"jsonrpc":"2.0","id":{},"error":{{ code:{}, message:"{}" }} }})",
         pParamsBase->req_id,
         err.num(),
         err.what()
