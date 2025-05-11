@@ -85,42 +85,9 @@ int main()
                     // Parse and dispatch with zero-copy
                     msgHandler.handle_incoming_message(std::move(msg));
 
-
-
-                    // TODO: 
-                    //  1. send ACK to the sender that we received the message.
-                    //  2. send the message to thread pool to get the work done.
-                    //std::move_only_function<void()> task = [msg = std::move(message)]() noexcept
-                    //    {
-                    //        TRACY_ZONE_NAMED("thread pool task");
-
-                    //        // retrieve this thread's pub socket
-                    //        auto iter = gThread_pub_sockets.find(std::this_thread::get_id());
-                    //        assert(iter != gThread_pub_sockets.end());
-                    //        zmq::socket_t& zmq_ack_publisher = iter->second;
-
-                    //        try
-                    //        {
-                    //            std::cout << "Inside Task" << std::endl;
-                    //            zmq_ack_publisher.send(zmq::message_t("Inside Task"), zmq::send_flags::dontwait);
-                    //        }
-                    //        catch (const zmq::error_t& e)
-                    //        {
-                    //            std::cerr << "ZeroMQ error: " << e.what() << '\n';
-                    //        }
-                    //        catch (const std::exception& e)
-                    //        {
-                    //            std::cerr << "Error processing the message: " << e.what() << std::endl;
-                    //        }
-                    //    };
-                    //try
-                    //{
-                    //    pool.detach_task(std::move(task)); // fire and forget
-                    //}
-                    //catch (const std::exception& e)
-                    //{
-                    //    std::cerr << "Failed to submit task to thread pool: " << e.what() << std::endl;
-                    //}
+                    // TODO: use MPSC + Lock-free Object Pool to send logs/responses from 
+                    // inside the threads to the main thread.
+                    msgHandler.publish_outgoing_messages();
                 }
             }
         }

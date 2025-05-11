@@ -93,7 +93,9 @@ public:
     void handle_incoming_message(zmq::message_t&& msg);
     void sendAck(const ParamsBase*);
     void sendError(const ParamsBase*, zmq::error_t&& err);
+    void publish_outgoing_messages();
 protected:
+    // TODO: replace these with object pool based buffers
     static fmt::memory_buffer ackBuf;
     static fmt::memory_buffer errBuf;
 };
