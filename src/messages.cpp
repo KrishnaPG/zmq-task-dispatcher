@@ -5,13 +5,17 @@
         { handleMethod(method_params);  };  \
     m_threadPool.detach_task(std::move(task)); // fire and forget
 
+// static member variables
+fmt::memory_buffer MessageHandler::ackBuf;
+fmt::memory_buffer MessageHandler::errBuf;
+
 // Parse params with zero-copy and dispatch to the thread-pool for execution
 void MessageHandler::handle_incoming_message(zmq::message_t&& msg)
 {
     size_t msgSize = msg.size();
-    assert(msgSize > sizeof(ParamsBase) && "Message too small");
+    assert(msgSize >= sizeof(ParamsBase) && "Message too small");
 
-    const ParamsBase* pParamsBase = static_cast<const ParamsBase*>(msg.data());
+    const ParamsBase* pParamsBase = reinterpret_cast<const ParamsBase*>(msg.data());
     assert(pParamsBase->req_id && "Request ID cannot be NULL");
     assert(pParamsBase->method_id < (TMethodID)MethodID::Unknown && "Invalid Method ID");
 
@@ -81,11 +85,27 @@ void MessageHandler::sendAck(const ParamsBase* pParamsBase)
     // reuse buffer
     MessageHandler::ackBuf.clear();
     fmt::format_to(std::back_inserter(MessageHandler::ackBuf),
-        R"({{"jsonrpc":"2.0","id":"{}"}})",
+        R"({{"jsonrpc":"2.0","ack":1,"id":"{}"}})",
         pParamsBase->req_id
     );
     // reuse the ackBuf for the zmq::message_t
     zmq::message_t ack(ackBuf.data(), ackBuf.size(), no_delete, nullptr);
     // zero-copy call with async fire and forget mode
     this->m_publisher.send(std::move(ack), zmq::send_flags::dontwait);
+}
+
+void MessageHandler::sendError(const ParamsBase* pParamsBase, zmq::error_t&& err)
+{
+    // reuse buffer
+    MessageHandler::errBuf.clear();
+    fmt::format_to(std::back_inserter(MessageHandler::errBuf),
+        R"({{"jsonrpc":"2.0","id":"{}","error":{{ code:{}, message:"{}" }} }})",
+        pParamsBase->req_id,
+        err.num(),
+        err.what()
+    );
+    // reuse the ackBuf for the zmq::message_t
+    zmq::message_t errMsg(errBuf.data(), errBuf.size(), no_delete, nullptr);
+    // zero-copy call with async fire and forget mode
+    this->m_publisher.send(std::move(errMsg), zmq::send_flags::dontwait);
 }

@@ -92,6 +92,8 @@ public:
     { }
     void handle_incoming_message(zmq::message_t&& msg);
     void sendAck(const ParamsBase*);
+    void sendError(const ParamsBase*, zmq::error_t&& err);
 protected:
     static fmt::memory_buffer ackBuf;
+    static fmt::memory_buffer errBuf;
 };
